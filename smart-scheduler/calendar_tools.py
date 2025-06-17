@@ -6,8 +6,8 @@ from googleapiclient.errors import HttpError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
+import pytz
 
-# If modifying these scopes, delete the file token.json.
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 def get_calendar_service():
@@ -32,6 +32,13 @@ def get_calendar_service():
             token.write(creds.to_json())
     service = build("calendar", "v3", credentials=creds)
     return service
+
+def make_timezone_aware(dt, timezone_str="Asia/Kolkata"):
+    """Convert datetime to timezone-aware if it isn't already."""
+    if dt.tzinfo is None:
+        tz = pytz.timezone(timezone_str)
+        return tz.localize(dt)
+    return dt
 
 def find_available_slots(
     duration_minutes: int,
@@ -65,12 +72,15 @@ def find_available_slots(
     if not window_start:
         # Default: today 8am to 8pm
         window_start = now.replace(hour=8, minute=0, second=0, microsecond=0)
+    else:
+        window_start = make_timezone_aware(window_start, timezone)
+        
     if not window_end:
         window_end = now.replace(hour=20, minute=0, second=0, microsecond=0) + datetime.timedelta(days=7)
+    else:
+        window_end = make_timezone_aware(window_end, timezone)
 
-    # If day is specified, adjust window to that day
     if day:
-        # Map day string to weekday index
         weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
         day = day.lower()
         today_idx = now.weekday()
@@ -81,7 +91,6 @@ def find_available_slots(
             window_start = target_date.replace(hour=8, minute=0, second=0, microsecond=0)
             window_end = target_date.replace(hour=20, minute=0, second=0, microsecond=0)
 
-    # If time_pref is specified, adjust window hours
     if time_pref:
         if "morning" in time_pref:
             window_start = window_start.replace(hour=8)
@@ -93,7 +102,6 @@ def find_available_slots(
             window_start = window_start.replace(hour=17)
             window_end = window_start.replace(hour=20)
 
-    # Get all events in the window
     events_result = (
         service.events()
         .list(
@@ -107,31 +115,41 @@ def find_available_slots(
     )
     events = events_result.get("items", [])
 
-    # Build a list of busy intervals
     busy = []
     for event in events:
         start = event["start"].get("dateTime", event["start"].get("date"))
         end = event["end"].get("dateTime", event["end"].get("date"))
-        busy.append(
-            (
-                datetime.datetime.fromisoformat(start),
-                datetime.datetime.fromisoformat(end),
-            )
-        )
+        
+        if "T" not in start:  # Date-only format
+            start_dt = datetime.datetime.fromisoformat(start + "T00:00:00")
+            end_dt = datetime.datetime.fromisoformat(end + "T23:59:59")
+            start_dt = make_timezone_aware(start_dt, timezone)
+            end_dt = make_timezone_aware(end_dt, timezone)
+        else:
+            start_dt = datetime.datetime.fromisoformat(start)
+            end_dt = datetime.datetime.fromisoformat(end)
+            # Ensure timezone awareness
+            if start_dt.tzinfo is None:
+                start_dt = make_timezone_aware(start_dt, timezone)
+            if end_dt.tzinfo is None:
+                end_dt = make_timezone_aware(end_dt, timezone)
+        
+        busy.append((start_dt, end_dt))
 
-    # Find free slots
     slots = []
     search_start = window_start
     search_end = window_end
     min_slot = datetime.timedelta(minutes=duration_minutes)
     busy = sorted(busy, key=lambda x: x[0])
+    
     for b_start, b_end in busy:
         if b_start > search_start and (b_start - search_start) >= min_slot:
             slots.append({"start": search_start.isoformat(), "end": b_start.isoformat()})
         search_start = max(search_start, b_end)
-    # Check for slot after last event
+    
     if search_end > search_start and (search_end - search_start) >= min_slot:
         slots.append({"start": search_start.isoformat(), "end": search_end.isoformat()})
+    
     return slots
 
 def create_calendar_event(
