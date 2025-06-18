@@ -26,7 +26,7 @@
 ### 1. Setup
 ```bash
 # Install dependencies
-pip install google-adk google-api-python-client google-auth-httplib2 google-auth-oauthlib pytz
+pip install -r requirements.txt
 
 # Get Google Calendar API credentials
 # 1. Go to Google Cloud Console
