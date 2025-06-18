@@ -114,11 +114,6 @@ AI: "I found 3 available slots tomorrow morning: 9:00 AM, 10:30 AM, 11:00 AM"
 
 ---
 
-## 📄 License
-
-MIT License - feel free to use and modify!
-
----
 
 <div align="center">
 
