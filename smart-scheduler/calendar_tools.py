@@ -11,6 +11,7 @@ import pytz
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
+#To make sure the agent is not executing the action without confirmation
 def is_voice_confirmation(user_input: str) -> bool:
     """
     Check if user input is a voice confirmation.
@@ -24,10 +25,8 @@ def is_voice_confirmation(user_input: str) -> bool:
     if not user_input:
         return False
     
-    # Convert to lowercase for case-insensitive matching
     input_lower = user_input.lower().strip()
     
-    # List of confirmation keywords and phrases
     confirmation_keywords = [
         'yes', 'confirm', 'correct', 'okay', 'sure', 'go ahead', 'do it', 
         'proceed', 'create it', 'update it', 'delete it', 'absolutely', 
@@ -38,16 +37,13 @@ def is_voice_confirmation(user_input: str) -> bool:
         'yes please', 'yes go ahead', 'yes do it', 'yes proceed'
     ]
     
-    # Check for exact matches
     if input_lower in confirmation_keywords:
         return True
     
-    # Check for partial matches (e.g., "yes that's correct")
     for keyword in confirmation_keywords:
         if keyword in input_lower:
             return True
     
-    # Check for patterns like "yes, please" or "yes go ahead"
     confirmation_patterns = [
         r'^yes\s+.*',
         r'^confirm\s+.*',
@@ -118,6 +114,7 @@ def safe_api_call(func, max_retries=3, delay=1.0):
                 raise e
     return None
 
+#To find the available slots in the calendar
 def find_available_slots(
     duration_minutes: int,
     day: Optional[str] = None,
@@ -170,7 +167,6 @@ def find_available_slots(
         else:
             window_end = make_timezone_aware(window_end, "Asia/Kolkata")
 
-        # Handle day parameter if provided
         if day is not None:
             weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
             day_lower = day.lower()
@@ -182,7 +178,6 @@ def find_available_slots(
                 window_start = target_date.replace(hour=8, minute=0, second=0, microsecond=0)
                 window_end = target_date.replace(hour=20, minute=0, second=0, microsecond=0)
 
-        # Handle time preference if provided
         if time_pref is not None:
             if "morning" in time_pref.lower():
                 window_start = window_start.replace(hour=8)
@@ -301,7 +296,6 @@ def create_calendar_event(
         By default, this function checks for conflicts and will not create overlapping events.
     """
     if not confirmed:
-        # Check for conflicts before showing confirmation
         if not skip_conflict_check:
             conflict_check = check_time_slot_availability(start_iso, end_iso)
             if not conflict_check.get("available", True):
@@ -415,11 +409,7 @@ def update_calendar_event(
     
     def _update_event():
         service = get_calendar_service()
-        
-        # First, get the current event
-        event = service.events().get(calendarId="primary", eventId=event_id).execute()
-        
-        # Update only the provided fields
+        event = service.events().get(calendarId="primary", eventId=event_id).execute()        
         if start_iso is not None:
             event["start"]["dateTime"] = start_iso
         if end_iso is not None:
@@ -431,7 +421,6 @@ def update_calendar_event(
         if attendees is not None:
             event["attendees"] = [{"email": email} for email in attendees]
         
-        # Update the event
         updated_event = service.events().update(
             calendarId="primary", 
             eventId=event_id, 
@@ -478,7 +467,6 @@ def delete_calendar_event(event_id: str, confirmed: bool = False) -> Dict[str, A
     def _delete_event():
         service = get_calendar_service()
         
-        # Delete the event
         service.events().delete(calendarId="primary", eventId=event_id).execute()
         
         return {
@@ -533,13 +521,11 @@ def list_calendar_events(
             if not date_str:
                 return None, None
                 
-            # If it's already in ISO format, return as is
             if 'T' in date_str and len(date_str) >= 10:
                 start_dt = datetime.datetime.fromisoformat(date_str)
                 end_dt = start_dt + datetime.timedelta(days=1)
                 return start_dt.isoformat(), end_dt.isoformat()
                 
-            # Handle relative dates
             now = datetime.datetime.now()
             current_year = now.year
             
@@ -556,19 +542,16 @@ def list_calendar_events(
                 end_dt = start_dt + datetime.timedelta(days=1)
                 return start_dt.isoformat(), end_dt.isoformat()
             
-            # Handle day names - first check if today is that day
             weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
             if date_str.lower() in weekdays:
                 day_idx = weekdays.index(date_str.lower())
                 today_idx = now.weekday()
                 
-                # If today is the requested day, use today
                 if day_idx == today_idx:
                     target_date = now
                 else:
-                    # Otherwise, find the next occurrence
                     days_ahead = (day_idx - today_idx) % 7
-                    if days_ahead == 0:  # This shouldn't happen now, but just in case
+                    if days_ahead == 0:
                         days_ahead = 7
                     target_date = now + datetime.timedelta(days=days_ahead)
                 
@@ -576,7 +559,6 @@ def list_calendar_events(
                 end_dt = start_dt + datetime.timedelta(days=1)
                 return start_dt.isoformat(), end_dt.isoformat()
             
-            # Handle "next" day names
             if date_str.lower().startswith("next "):
                 day_name = date_str.lower().replace("next ", "")
                 if day_name in weekdays:
@@ -588,21 +570,19 @@ def list_calendar_events(
                     end_dt = start_dt + datetime.timedelta(days=1)
                     return start_dt.isoformat(), end_dt.isoformat()
             
-            # Handle "this" day names
             if date_str.lower().startswith("this "):
                 day_name = date_str.lower().replace("this ", "")
                 if day_name in weekdays:
                     day_idx = weekdays.index(day_name)
                     today_idx = now.weekday()
                     days_ahead = (day_idx - today_idx) % 7
-                    if days_ahead == 0:  # Same day
+                    if days_ahead == 0:
                         days_ahead = 7
                     target_date = now + datetime.timedelta(days=days_ahead)
                     start_dt = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
                     end_dt = start_dt + datetime.timedelta(days=1)
                     return start_dt.isoformat(), end_dt.isoformat()
             
-            # Handle month names with day (e.g., "January 15", "March 20")
             import re
             month_pattern = r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})"
             match = re.search(month_pattern, date_str.lower())
@@ -612,16 +592,13 @@ def list_calendar_events(
                 months = ["january", "february", "march", "april", "may", "june", 
                          "july", "august", "september", "october", "november", "december"]
                 month_idx = months.index(month_name)
-                # Assume current year unless explicitly specified
                 target_date = datetime.datetime(current_year, month_idx + 1, day)
                 start_dt = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
                 end_dt = start_dt + datetime.timedelta(days=1)
                 return start_dt.isoformat(), end_dt.isoformat()
             
-            # If we can't parse it, return None
             return None, None
         
-        # Parse start and end dates
         if start_date:
             parsed_start_date, _ = parse_date_string(start_date)
         else:
@@ -632,13 +609,11 @@ def list_calendar_events(
         else:
             parsed_end_date = None
         
-        # Set default date range if not provided
         if not parsed_start_date:
             parsed_start_date = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
         if not parsed_end_date:
             parsed_end_date = (datetime.datetime.now() + datetime.timedelta(days=7)).replace(hour=23, minute=59, second=59, microsecond=999999).isoformat()
         
-        # Make dates timezone aware
         start_dt = make_timezone_aware(datetime.datetime.fromisoformat(parsed_start_date), "Asia/Kolkata")
         end_dt = make_timezone_aware(datetime.datetime.fromisoformat(parsed_end_date), "Asia/Kolkata")
         
@@ -657,7 +632,6 @@ def list_calendar_events(
         
         events = events_result.get("items", [])
         
-        # Format events for better readability
         formatted_events = []
         for event in events:
             formatted_event = {
@@ -708,11 +682,9 @@ def check_time_slot_availability(
     def _check_availability():
         service = get_calendar_service()
         
-        # Parse the requested time slot
         requested_start = make_timezone_aware(datetime.datetime.fromisoformat(start_iso), "Asia/Kolkata")
         requested_end = make_timezone_aware(datetime.datetime.fromisoformat(end_iso), "Asia/Kolkata")
         
-        # Get events that overlap with the requested time slot
         events_result = (
             service.events()
             .list(
@@ -729,8 +701,7 @@ def check_time_slot_availability(
         for event in events_result.get("items", []):
             event_start = event["start"].get("dateTime", event["start"].get("date"))
             event_end = event["end"].get("dateTime", event["end"].get("date"))
-            
-            # Parse event times
+
             if "T" not in event_start:
                 event_start_dt = datetime.datetime.fromisoformat(event_start + "T00:00:00")
                 event_end_dt = datetime.datetime.fromisoformat(event_end + "T23:59:59")
@@ -1196,16 +1167,13 @@ def update_event_by_name_and_date(
             "status": "multiple_events_found"
         }
     
-    # Update the single matching event
     event_to_update = matching_events[0]
     
     def _update_event():
         service = get_calendar_service()
         
-        # First, get the current event
         event = service.events().get(calendarId="primary", eventId=event_to_update["id"]).execute()
         
-        # Update only the provided fields
         if start_iso is not None:
             event["start"]["dateTime"] = start_iso
         if end_iso is not None:
@@ -1217,7 +1185,6 @@ def update_event_by_name_and_date(
         if attendees is not None:
             event["attendees"] = [{"email": email} for email in attendees]
         
-        # Update the event
         updated_event = service.events().update(
             calendarId="primary", 
             eventId=event_to_update["id"], 
@@ -1252,11 +1219,8 @@ def parse_time_from_natural_language(time_str: str, date_str: Optional[str] = No
     Note:
         All times are in Asia/Kolkata timezone. If no date is provided, uses today's date.
     """
-    import re
     
-    # Get the target date
     if date_str:
-        # Use the existing date parsing logic
         def parse_date_string(date_str: str) -> tuple:
             if not date_str:
                 return None, None
@@ -1273,25 +1237,21 @@ def parse_time_from_natural_language(time_str: str, date_str: Optional[str] = No
                 yesterday = now - datetime.timedelta(days=1)
                 return yesterday.replace(hour=0, minute=0, second=0, microsecond=0).isoformat(), None
             
-            # Handle day names
             weekdays = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
             if date_str.lower() in weekdays:
                 day_idx = weekdays.index(date_str.lower())
                 today_idx = now.weekday()
                 
-                # If today is the requested day, use today
                 if day_idx == today_idx:
                     target_date = now
                 else:
-                    # Otherwise, find the next occurrence
                     days_ahead = (day_idx - today_idx) % 7
-                    if days_ahead == 0:  # This shouldn't happen now, but just in case
+                    if days_ahead == 0: 
                         days_ahead = 7
                     target_date = now + datetime.timedelta(days=days_ahead)
                 
                 return target_date.replace(hour=0, minute=0, second=0, microsecond=0).isoformat(), None
             
-            # Handle "next" day names
             if date_str.lower().startswith("next "):
                 day_name = date_str.lower().replace("next ", "")
                 if day_name in weekdays:
@@ -1301,7 +1261,6 @@ def parse_time_from_natural_language(time_str: str, date_str: Optional[str] = No
                     target_date = now + datetime.timedelta(days=days_ahead)
                     return target_date.replace(hour=0, minute=0, second=0, microsecond=0).isoformat(), None
             
-            # Handle month names with day
             month_pattern = r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})"
             match = re.search(month_pattern, date_str.lower())
             if match:
@@ -1317,24 +1276,19 @@ def parse_time_from_natural_language(time_str: str, date_str: Optional[str] = No
         
         date_iso, _ = parse_date_string(date_str)
         if not date_iso:
-            # If we can't parse the date, use today
             target_date = datetime.datetime.now()
         else:
             target_date = datetime.datetime.fromisoformat(date_iso)
     else:
-        # Use today's date
         target_date = datetime.datetime.now()
     
-    # Parse the time
     time_str = time_str.strip().lower()
     
-    # Handle 24-hour format (e.g., "14:00", "15:30")
     if re.match(r'^\d{1,2}:\d{2}$', time_str):
         hour, minute = map(int, time_str.split(':'))
         if hour < 0 or hour > 23 or minute < 0 or minute > 59:
             raise ValueError(f"Invalid time format: {time_str}")
     else:
-        # Handle 12-hour format (e.g., "2 PM", "3:30 PM", "9 AM")
         time_pattern = r'^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$'
         match = re.match(time_pattern, time_str)
         if not match:
@@ -1347,16 +1301,13 @@ def parse_time_from_natural_language(time_str: str, date_str: Optional[str] = No
         if hour < 1 or hour > 12 or minute < 0 or minute > 59:
             raise ValueError(f"Invalid time format: {time_str}")
         
-        # Convert to 24-hour format
         if period == 'pm' and hour != 12:
             hour += 12
         elif period == 'am' and hour == 12:
             hour = 0
     
-    # Create the datetime object
     result_datetime = target_date.replace(hour=hour, minute=minute, second=0, microsecond=0)
     
-    # Make it timezone aware
     result_datetime = make_timezone_aware(result_datetime, "Asia/Kolkata")
     
     return result_datetime.isoformat()
