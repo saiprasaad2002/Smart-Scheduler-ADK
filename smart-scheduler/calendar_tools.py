@@ -11,59 +11,6 @@ import pytz
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
-#To make sure the agent is not executing the action without confirmation
-def is_voice_confirmation(user_input: str) -> bool:
-    """
-    Check if user input is a voice confirmation.
-    
-    Args:
-        user_input (str): User's voice input or text
-        
-    Returns:
-        bool: True if input is a confirmation, False otherwise
-    """
-    if not user_input:
-        return False
-    
-    input_lower = user_input.lower().strip()
-    
-    confirmation_keywords = [
-        'yes', 'confirm', 'correct', 'okay', 'sure', 'go ahead', 'do it', 
-        'proceed', 'create it', 'update it', 'delete it', 'absolutely', 
-        'definitely', "that's right", 'sounds good', 'perfect', 'alright', 
-        'fine', 'proceed', 'execute', 'go for it', 'yep', 'yeah', 'yup',
-        'ok', 'right', 'exactly', 'indeed', 'certainly', 'of course',
-        'by all means', 'sure thing', 'no problem', 'absolutely yes',
-        'yes please', 'yes go ahead', 'yes do it', 'yes proceed'
-    ]
-    
-    if input_lower in confirmation_keywords:
-        return True
-    
-    for keyword in confirmation_keywords:
-        if keyword in input_lower:
-            return True
-    
-    confirmation_patterns = [
-        r'^yes\s+.*',
-        r'^confirm\s+.*',
-        r'^correct\s+.*',
-        r'^okay\s+.*',
-        r'^sure\s+.*',
-        r'^proceed\s+.*',
-        r'^go\s+ahead\s+.*',
-        r'^do\s+it\s+.*',
-        r'^create\s+it\s+.*',
-        r'^update\s+it\s+.*',
-        r'^delete\s+it\s+.*'
-    ]
-    
-    for pattern in confirmation_patterns:
-        if re.match(pattern, input_lower):
-            return True
-    
-    return False
-
 def get_calendar_service():
     """Authenticate and return a Google Calendar API service instance."""
     creds = None
