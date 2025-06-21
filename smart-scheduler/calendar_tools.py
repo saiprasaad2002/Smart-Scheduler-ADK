@@ -253,7 +253,7 @@ def create_calendar_event(
                     "conflicts": conflicting_events,
                     "conflict_details": conflict_list,
                     "status": "conflict_detected",
-                    "suggestion": "Please choose a different time or use 'find_available_slots' to see available times."
+                    "suggestion": "Please choose a different time since the time slot is already booked."
                 }
         
         return {
@@ -530,7 +530,6 @@ def list_calendar_events(
                     end_dt = start_dt + datetime.timedelta(days=1)
                     return start_dt.isoformat(), end_dt.isoformat()
             
-            import re
             month_pattern = r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})"
             match = re.search(month_pattern, date_str.lower())
             if match:
@@ -791,7 +790,6 @@ def find_events_by_name_and_date(
                     return start_dt.isoformat(), end_dt.isoformat()
             
             # Handle month names with day (e.g., "January 15", "March 20")
-            import re
             month_pattern = r"(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})"
             match = re.search(month_pattern, date_str.lower())
             if match:
